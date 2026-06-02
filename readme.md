@@ -1,6 +1,6 @@
 ## POWERSHELL COLLECTIONS ##
 
-As usual, these scripts were solutions to particular issues I had, sometimes only once, which required a quick script. And because of interoperability with the NET environment, PowerShell is oftenmore useful than Python for these kinds of things....
+As usual, these scripts were solutions to particular issues I had, sometimes only once, which required a quick script. And because of interoperability with the NET environment, PowerShell is oftenmore useful than Python for these kinds of things for Windows machines.
 
 
 ### *.PS1 SCRIPTS ###
