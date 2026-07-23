@@ -12,3 +12,5 @@ As usual, these scripts were solutions to particular issues I had, sometimes onl
 5. **serve.ps1** - creates an npx server rooted in the directory of the ps1 file, at https://localhost:$port (default 8080) and launches a new Chrome window, loading index.html (et al) - designed when  I was having CORS issues when an inert and non-risky project.
 6. **svg_recolor.ps1** - recolors all SVGs in a directory branch - ALL color attribute/properties are set to the specified color. Backup before using. Nominally meant to be used to recolor large UI icon collections.
 7. **svg_scrub_path2symbol.ps1** - searches same directory for all SVG files, scrubs the path data from them, concatenates it, and then outputs a symbol element - useful for creating SVG "spritesheets."
+8. **file_prefix.ps1** - adds a specified prefix to file names in a target directory (optionally recursive), useful for batch renaming files to match naming conventions.
+9. **mp3_clean_trim.ps1** - trims silence/noise from MP3 files and outputs cleaned versions for easier playback or downstream processing.
