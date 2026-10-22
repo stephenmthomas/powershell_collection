@@ -14,3 +14,4 @@ As usual, these scripts were solutions to particular issues I had, sometimes onl
 7. **svg_scrub_path2symbol.ps1** - searches same directory for all SVG files, scrubs the path data from them, concatenates it, and then outputs a symbol element - useful for creating SVG "spritesheets."
 8. **file_prefix.ps1** - adds a specified prefix to file names in a target directory (optionally recursive), useful for batch renaming files to match naming conventions.
 9. **mp3_clean_trim.ps1** - trims silence/noise from MP3 files and outputs cleaned versions for easier playback or downstream processing.
+10. **pdf_invert_darkmode.ps1** - inverts a PDFs vector color information to hackily apply a dark mode.  Batches directory/all PDFs. 
