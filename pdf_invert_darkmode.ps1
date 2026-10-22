@@ -1,61 +1,63 @@
-# Invert PDF drawing colors without rasterizing text / shapes / notation.
-# Requires PyMuPDF
-# to install PyMuPDF, powershell line: py -3 -m pip install pymupdf
-#
-
-param(
-    [string]$Path = $PSScriptRoot
-)
+# Non-raster PDF negative using a white /Difference blend overlay.
+# Requires: py -3 -m pip install pymupdf
+param([string]$Path = $PSScriptRoot)
 $ErrorActionPreference = 'Stop'
-$python = @'
-import fitz, re, pathlib, sys
-root = pathlib.Path(sys.argv[1])
-files = [root] if root.is_file() else sorted(p for p in root.glob('*.pdf') if not p.stem.lower().endswith('_dark'))
-# PDF content stream RGB, grayscale, and CMYK color-setting operators.
-pat = re.compile(rb'(?m)(?<!\S)((?:[+]?(?:\d*\.\d+|\d+\.?\d*)\s+){1,4})(rg|RG|g|G|k|K)(?=\s|$)')
-def invert(m):
-    op = m.group(2)
-    vals = list(map(float, m.group(1).split()))
-    count = 3 if op in (b'rg', b'RG') else 1 if op in (b'g', b'G') else 4
-    if len(vals) != count: return m.group(0)
-    # CMYK: convert to RGB, invert, emit RGB operator for a predictable result.
-    if count == 4:
-        c, mag, y, k = vals
-        rgb = [(1-c)*(1-k), (1-mag)*(1-k), (1-y)*(1-k)]
-        op = b'rg' if op == b'k' else b'RG'
-        return b' '.join(f'{1-v:.6f}'.encode() for v in rgb) + b' ' + op
-    return b' '.join(f'{1-v:.6f}'.encode() for v in vals) + b' ' + op
-for src in files:
+$code = @'
+import fitz, pathlib, sys
+source = pathlib.Path(sys.argv[1]).resolve()
+if source.is_dir():
+    inputs = sorted(p for p in source.glob('*.pdf') if not p.stem.lower().endswith('_dark'))
+elif source.is_file():
+    inputs = [source]
+else:
+    raise SystemExit(f'Path not found: {source}')
+if not inputs:
+    print('No input PDFs found.')
+
+def install_blend_resource(doc, page, name):
+    kind, value = doc.xref_get_key(page.xref, 'Resources')
+    if kind != 'xref':
+        raise ValueError('Unsupported page resource dictionary')
+    resources_xref = int(value.split()[0])
+    blend = '<</Type /ExtGState /BM /Difference /ca 1 /CA 1>>'
+    ext_type, ext_value = doc.xref_get_key(resources_xref, 'ExtGState')
+    if ext_type == 'xref':
+        doc.xref_set_key(int(ext_value.split()[0]), name, blend)
+    else:
+        doc.xref_set_key(resources_xref, 'ExtGState/' + name, blend)
+
+for src in inputs:
     dst = src.with_name(src.stem + '_Dark.pdf')
     try:
-        doc = fitz.open(str(src))
+        doc = fitz.open(src)
         if doc.needs_pass:
-            print(f'SKIP password protected: {src.name}'); doc.close(); continue
-        changed = 0
-        seen = set()
+            print(f'SKIPPED (password protected): {src.name}')
+            doc.close()
+            continue
         for page in doc:
-            for xref in page.get_contents():
-                if xref in seen: continue
-                seen.add(xref)
-                data = doc.xref_stream(xref)
-                new, n = pat.subn(invert, data)
-                if n:
-                    doc.update_stream(xref, new)
-                    changed += n
-        # Add full-page black underlay, covering formerly transparent / viewer-white margins.
-        for page in doc:
-            page.draw_rect(page.rect, color=None, fill=(0, 0, 0), overlay=False)
-        doc.save(str(dst), garbage=4, deflate=True)
+            # Add an opaque white base even if original PDF relies on transparent paper.
+            page.draw_rect(page.rect, fill=(1, 1, 1), color=None, overlay=False)
+            # Add a white layer on top. Difference blending: abs(backdrop - 1) = inverse.
+            page.draw_rect(page.rect, fill=(1, 1, 1), color=None, overlay=True)
+            last_xref = page.get_contents()[-1]
+            raw = doc.xref_stream(last_xref)
+            replacement = raw.replace(b'1 1 1 rg f', b'/PDF_NEGATIVE gs 1 1 1 rg f')
+            if replacement == raw:
+                raise ValueError('Unexpected PyMuPDF drawing output; overlay not patched')
+            doc.update_stream(last_xref, replacement)
+            install_blend_resource(doc, page, 'PDF_NEGATIVE')
+        doc.save(dst, garbage=4, deflate=True)
         doc.close()
-        print(f'{src.name} -> {dst.name} ({changed} color commands changed)')
-    except Exception as e:
-        print(f'ERROR {src.name}: {e}', file=sys.stderr)
+        print(f'OK: {src.name} -> {dst.name}')
+    except Exception as exc:
+        print(f'ERROR: {src.name}: {exc}', file=sys.stderr)
 '@
-$temp = Join-Path $env:TEMP ("pdf_invert_" + [guid]::NewGuid().ToString('N') + '.py')
+$temp = Join-Path $env:TEMP ("invert_pdf_" + [guid]::NewGuid().ToString('N') + '.py')
 try {
-    [System.IO.File]::WriteAllText($temp, $python, [System.Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($temp, $code, [Text.UTF8Encoding]::new($false))
     & py -3 $temp $Path
-    if ($LASTEXITCODE -ne 0) { throw 'Conversion failed. Install PyMuPDF: py -3 -m pip install pymupdf' }
-} finally {
+    if ($LASTEXITCODE -ne 0) { throw 'Python conversion failed. Install: py -3 -m pip install pymupdf' }
+}
+finally {
     Remove-Item $temp -ErrorAction SilentlyContinue
 }
